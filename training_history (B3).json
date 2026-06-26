@@ -1,0 +1,706 @@
+{
+  "model": "SegformerForSemanticSegmentation (nvidia/mit-b3)",
+  "device": "cuda (Tesla T4, 15.6 GB)",
+  "config": {
+    "batch_size": 4,
+    "grad_accumulation": 4,
+    "steps_per_epoch": 361,
+    "amp": true
+  },
+  "best_mIoU": 0.3885,
+  "best_epoch": 30,
+  "classes": ["background", "building flooded", "grass", "pool", "road flooded", "tree", "vehicle", "water"],
+  "class_pixels": {
+    "background": 39579459,
+    "building flooded": 15071631,
+    "grass": 29100140,
+    "pool": 6858093,
+    "road flooded": 15625293,
+    "tree": 10740305,
+    "vehicle": 106300,
+    "water": 359291
+  },
+  "epochs": [
+    {
+      "epoch": 1,
+      "train_loss": 1.1438,
+      "val_loss": 0.9212,
+      "mIoU": 0.2307,
+      "lr": 3.32e-05,
+      "duration_s": 176.6,
+      "new_best": true,
+      "patience": 0,
+      "class_metrics": {
+        "background":       {"IoU": 0.224, "Dice": 0.366},
+        "building flooded": {"IoU": 0.246, "Dice": 0.395},
+        "grass":            {"IoU": 0.481, "Dice": 0.649},
+        "pool":             {"IoU": 0.151, "Dice": 0.263},
+        "road flooded":     {"IoU": 0.295, "Dice": 0.456},
+        "tree":             {"IoU": 0.369, "Dice": 0.539},
+        "vehicle":          {"IoU": 0.079, "Dice": 0.146},
+        "water":            {"IoU": 0.001, "Dice": 0.001}
+      }
+    },
+    {
+      "epoch": 2,
+      "train_loss": 0.8490,
+      "val_loss": 0.8297,
+      "mIoU": 0.3012,
+      "lr": 6.65e-05,
+      "duration_s": 176.7,
+      "new_best": true,
+      "patience": 0,
+      "class_metrics": {
+        "background":       {"IoU": 0.398, "Dice": 0.570},
+        "building flooded": {"IoU": 0.345, "Dice": 0.513},
+        "grass":            {"IoU": 0.536, "Dice": 0.698},
+        "pool":             {"IoU": 0.209, "Dice": 0.346},
+        "road flooded":     {"IoU": 0.343, "Dice": 0.511},
+        "tree":             {"IoU": 0.456, "Dice": 0.627},
+        "vehicle":          {"IoU": 0.122, "Dice": 0.218},
+        "water":            {"IoU": 0.000, "Dice": 0.000}
+      }
+    },
+    {
+      "epoch": 3,
+      "train_loss": 0.7823,
+      "val_loss": 0.7840,
+      "mIoU": 0.3131,
+      "lr": 9.97e-05,
+      "duration_s": 182.5,
+      "new_best": true,
+      "patience": 0,
+      "class_metrics": {
+        "background":       {"IoU": 0.456, "Dice": 0.627},
+        "building flooded": {"IoU": 0.377, "Dice": 0.548},
+        "grass":            {"IoU": 0.536, "Dice": 0.698},
+        "pool":             {"IoU": 0.201, "Dice": 0.335},
+        "road flooded":     {"IoU": 0.364, "Dice": 0.534},
+        "tree":             {"IoU": 0.492, "Dice": 0.660},
+        "vehicle":          {"IoU": 0.073, "Dice": 0.136},
+        "water":            {"IoU": 0.005, "Dice": 0.011}
+      }
+    },
+    {
+      "epoch": 4,
+      "train_loss": 0.7455,
+      "val_loss": 0.7918,
+      "mIoU": 0.3331,
+      "lr": 1.33e-04,
+      "duration_s": 184.1,
+      "new_best": true,
+      "patience": 0,
+      "class_metrics": {
+        "background":       {"IoU": 0.481, "Dice": 0.649},
+        "building flooded": {"IoU": 0.378, "Dice": 0.549},
+        "grass":            {"IoU": 0.571, "Dice": 0.727},
+        "pool":             {"IoU": 0.250, "Dice": 0.400},
+        "road flooded":     {"IoU": 0.344, "Dice": 0.512},
+        "tree":             {"IoU": 0.493, "Dice": 0.660},
+        "vehicle":          {"IoU": 0.145, "Dice": 0.253},
+        "water":            {"IoU": 0.003, "Dice": 0.005}
+      }
+    },
+    {
+      "epoch": 5,
+      "train_loss": 0.7196,
+      "val_loss": 0.7666,
+      "mIoU": 0.3298,
+      "lr": 1.66e-04,
+      "duration_s": 183.6,
+      "new_best": false,
+      "patience": 1,
+      "class_metrics": {
+        "background":       {"IoU": 0.452, "Dice": 0.623},
+        "building flooded": {"IoU": 0.379, "Dice": 0.550},
+        "grass":            {"IoU": 0.561, "Dice": 0.719},
+        "pool":             {"IoU": 0.225, "Dice": 0.367},
+        "road flooded":     {"IoU": 0.409, "Dice": 0.581},
+        "tree":             {"IoU": 0.491, "Dice": 0.658},
+        "vehicle":          {"IoU": 0.099, "Dice": 0.180},
+        "water":            {"IoU": 0.022, "Dice": 0.043}
+      }
+    },
+    {
+      "epoch": 6,
+      "train_loss": 0.6973,
+      "val_loss": 0.8057,
+      "mIoU": 0.3349,
+      "lr": 1.99e-04,
+      "duration_s": 179.3,
+      "new_best": true,
+      "patience": 0,
+      "class_metrics": {
+        "background":       {"IoU": 0.484, "Dice": 0.652},
+        "building flooded": {"IoU": 0.324, "Dice": 0.489},
+        "grass":            {"IoU": 0.567, "Dice": 0.724},
+        "pool":             {"IoU": 0.254, "Dice": 0.405},
+        "road flooded":     {"IoU": 0.375, "Dice": 0.545},
+        "tree":             {"IoU": 0.519, "Dice": 0.684},
+        "vehicle":          {"IoU": 0.149, "Dice": 0.259},
+        "water":            {"IoU": 0.007, "Dice": 0.015}
+      }
+    },
+    {
+      "epoch": 7,
+      "train_loss": 0.6806,
+      "val_loss": 0.7955,
+      "mIoU": 0.3103,
+      "lr": 2.33e-04,
+      "duration_s": 184.0,
+      "new_best": false,
+      "patience": 1,
+      "class_metrics": {
+        "background":       {"IoU": 0.386, "Dice": 0.557},
+        "building flooded": {"IoU": 0.339, "Dice": 0.507},
+        "grass":            {"IoU": 0.559, "Dice": 0.717},
+        "pool":             {"IoU": 0.261, "Dice": 0.414},
+        "road flooded":     {"IoU": 0.337, "Dice": 0.504},
+        "tree":             {"IoU": 0.414, "Dice": 0.586},
+        "vehicle":          {"IoU": 0.137, "Dice": 0.241},
+        "water":            {"IoU": 0.049, "Dice": 0.094}
+      }
+    },
+    {
+      "epoch": 8,
+      "train_loss": 0.6771,
+      "val_loss": 0.8049,
+      "mIoU": 0.3275,
+      "lr": 2.66e-04,
+      "duration_s": 180.0,
+      "new_best": false,
+      "patience": 2,
+      "class_metrics": {
+        "background":       {"IoU": 0.504, "Dice": 0.670},
+        "building flooded": {"IoU": 0.297, "Dice": 0.458},
+        "grass":            {"IoU": 0.559, "Dice": 0.717},
+        "pool":             {"IoU": 0.218, "Dice": 0.358},
+        "road flooded":     {"IoU": 0.358, "Dice": 0.527},
+        "tree":             {"IoU": 0.509, "Dice": 0.675},
+        "vehicle":          {"IoU": 0.143, "Dice": 0.251},
+        "water":            {"IoU": 0.032, "Dice": 0.062}
+      }
+    },
+    {
+      "epoch": 9,
+      "train_loss": 0.6607,
+      "val_loss": 0.7688,
+      "mIoU": 0.3520,
+      "lr": 2.99e-04,
+      "duration_s": 178.2,
+      "new_best": true,
+      "patience": 0,
+      "class_metrics": {
+        "background":       {"IoU": 0.459, "Dice": 0.629},
+        "building flooded": {"IoU": 0.384, "Dice": 0.555},
+        "grass":            {"IoU": 0.578, "Dice": 0.733},
+        "pool":             {"IoU": 0.290, "Dice": 0.450},
+        "road flooded":     {"IoU": 0.415, "Dice": 0.587},
+        "tree":             {"IoU": 0.476, "Dice": 0.645},
+        "vehicle":          {"IoU": 0.141, "Dice": 0.247},
+        "water":            {"IoU": 0.073, "Dice": 0.136}
+      }
+    },
+    {
+      "epoch": 10,
+      "train_loss": 0.6435,
+      "val_loss": 0.7703,
+      "mIoU": 0.3405,
+      "lr": 3.32e-04,
+      "duration_s": 184.8,
+      "new_best": false,
+      "patience": 1,
+      "class_metrics": {
+        "background":       {"IoU": 0.438, "Dice": 0.609},
+        "building flooded": {"IoU": 0.388, "Dice": 0.559},
+        "grass":            {"IoU": 0.570, "Dice": 0.726},
+        "pool":             {"IoU": 0.247, "Dice": 0.396},
+        "road flooded":     {"IoU": 0.365, "Dice": 0.535},
+        "tree":             {"IoU": 0.523, "Dice": 0.687},
+        "vehicle":          {"IoU": 0.111, "Dice": 0.200},
+        "water":            {"IoU": 0.081, "Dice": 0.149}
+      }
+    },
+    {
+      "epoch": 11,
+      "train_loss": 0.6382,
+      "val_loss": 0.7993,
+      "mIoU": 0.3597,
+      "lr": 3.66e-04,
+      "duration_s": 179.3,
+      "new_best": true,
+      "patience": 0,
+      "class_metrics": {
+        "background":       {"IoU": 0.535, "Dice": 0.697},
+        "building flooded": {"IoU": 0.381, "Dice": 0.552},
+        "grass":            {"IoU": 0.571, "Dice": 0.727},
+        "pool":             {"IoU": 0.226, "Dice": 0.368},
+        "road flooded":     {"IoU": 0.389, "Dice": 0.560},
+        "tree":             {"IoU": 0.532, "Dice": 0.695},
+        "vehicle":          {"IoU": 0.136, "Dice": 0.239},
+        "water":            {"IoU": 0.109, "Dice": 0.196}
+      }
+    },
+    {
+      "epoch": 12,
+      "train_loss": 0.6279,
+      "val_loss": 0.7659,
+      "mIoU": 0.3551,
+      "lr": 3.99e-04,
+      "duration_s": 184.3,
+      "new_best": false,
+      "patience": 1,
+      "class_metrics": {
+        "background":       {"IoU": 0.494, "Dice": 0.661},
+        "building flooded": {"IoU": 0.366, "Dice": 0.536},
+        "grass":            {"IoU": 0.597, "Dice": 0.748},
+        "pool":             {"IoU": 0.245, "Dice": 0.393},
+        "road flooded":     {"IoU": 0.402, "Dice": 0.574},
+        "tree":             {"IoU": 0.542, "Dice": 0.703},
+        "vehicle":          {"IoU": 0.124, "Dice": 0.221},
+        "water":            {"IoU": 0.071, "Dice": 0.132}
+      }
+    },
+    {
+      "epoch": 13,
+      "train_loss": 0.6275,
+      "val_loss": 0.7646,
+      "mIoU": 0.3615,
+      "lr": 4.00e-04,
+      "duration_s": 179.4,
+      "new_best": true,
+      "patience": 0,
+      "class_metrics": {
+        "background":       {"IoU": 0.520, "Dice": 0.684},
+        "building flooded": {"IoU": 0.381, "Dice": 0.552},
+        "grass":            {"IoU": 0.609, "Dice": 0.757},
+        "pool":             {"IoU": 0.250, "Dice": 0.400},
+        "road flooded":     {"IoU": 0.414, "Dice": 0.586},
+        "tree":             {"IoU": 0.523, "Dice": 0.687},
+        "vehicle":          {"IoU": 0.163, "Dice": 0.280},
+        "water":            {"IoU": 0.032, "Dice": 0.063}
+      }
+    },
+    {
+      "epoch": 14,
+      "train_loss": 0.5956,
+      "val_loss": 0.8120,
+      "mIoU": 0.3511,
+      "lr": 3.99e-04,
+      "duration_s": 183.3,
+      "new_best": false,
+      "patience": 1,
+      "class_metrics": {
+        "background":       {"IoU": 0.508, "Dice": 0.673},
+        "building flooded": {"IoU": 0.370, "Dice": 0.540},
+        "grass":            {"IoU": 0.583, "Dice": 0.736},
+        "pool":             {"IoU": 0.257, "Dice": 0.409},
+        "road flooded":     {"IoU": 0.405, "Dice": 0.576},
+        "tree":             {"IoU": 0.509, "Dice": 0.674},
+        "vehicle":          {"IoU": 0.115, "Dice": 0.207},
+        "water":            {"IoU": 0.063, "Dice": 0.119}
+      }
+    },
+    {
+      "epoch": 15,
+      "train_loss": 0.5821,
+      "val_loss": 0.7732,
+      "mIoU": 0.3539,
+      "lr": 3.98e-04,
+      "duration_s": 179.6,
+      "new_best": false,
+      "patience": 2,
+      "class_metrics": {
+        "background":       {"IoU": 0.495, "Dice": 0.663},
+        "building flooded": {"IoU": 0.355, "Dice": 0.523},
+        "grass":            {"IoU": 0.590, "Dice": 0.742},
+        "pool":             {"IoU": 0.240, "Dice": 0.387},
+        "road flooded":     {"IoU": 0.424, "Dice": 0.595},
+        "tree":             {"IoU": 0.534, "Dice": 0.696},
+        "vehicle":          {"IoU": 0.123, "Dice": 0.220},
+        "water":            {"IoU": 0.070, "Dice": 0.131}
+      }
+    },
+    {
+      "epoch": 16,
+      "train_loss": 0.5704,
+      "val_loss": 0.8146,
+      "mIoU": 0.3542,
+      "lr": 3.97e-04,
+      "duration_s": 179.0,
+      "new_best": false,
+      "patience": 3,
+      "class_metrics": {
+        "background":       {"IoU": 0.474, "Dice": 0.643},
+        "building flooded": {"IoU": 0.396, "Dice": 0.567},
+        "grass":            {"IoU": 0.563, "Dice": 0.720},
+        "pool":             {"IoU": 0.271, "Dice": 0.427},
+        "road flooded":     {"IoU": 0.396, "Dice": 0.568},
+        "tree":             {"IoU": 0.543, "Dice": 0.704},
+        "vehicle":          {"IoU": 0.144, "Dice": 0.252},
+        "water":            {"IoU": 0.046, "Dice": 0.088}
+      }
+    },
+    {
+      "epoch": 17,
+      "train_loss": 0.5698,
+      "val_loss": 0.7803,
+      "mIoU": 0.3653,
+      "lr": 3.95e-04,
+      "duration_s": 180.4,
+      "new_best": true,
+      "patience": 0,
+      "class_metrics": {
+        "background":       {"IoU": 0.555, "Dice": 0.714},
+        "building flooded": {"IoU": 0.372, "Dice": 0.542},
+        "grass":            {"IoU": 0.586, "Dice": 0.739},
+        "pool":             {"IoU": 0.278, "Dice": 0.435},
+        "road flooded":     {"IoU": 0.383, "Dice": 0.554},
+        "tree":             {"IoU": 0.566, "Dice": 0.723},
+        "vehicle":          {"IoU": 0.149, "Dice": 0.259},
+        "water":            {"IoU": 0.033, "Dice": 0.065}
+      }
+    },
+    {
+      "epoch": 18,
+      "train_loss": 0.5409,
+      "val_loss": 0.7890,
+      "mIoU": 0.3483,
+      "lr": 3.92e-04,
+      "duration_s": 183.2,
+      "new_best": false,
+      "patience": 1,
+      "class_metrics": {
+        "background":       {"IoU": 0.480, "Dice": 0.649},
+        "building flooded": {"IoU": 0.369, "Dice": 0.539},
+        "grass":            {"IoU": 0.590, "Dice": 0.742},
+        "pool":             {"IoU": 0.249, "Dice": 0.399},
+        "road flooded":     {"IoU": 0.413, "Dice": 0.585},
+        "tree":             {"IoU": 0.535, "Dice": 0.697},
+        "vehicle":          {"IoU": 0.118, "Dice": 0.211},
+        "water":            {"IoU": 0.031, "Dice": 0.060}
+      }
+    },
+    {
+      "epoch": 19,
+      "train_loss": 0.5264,
+      "val_loss": 0.7774,
+      "mIoU": 0.3655,
+      "lr": 3.90e-04,
+      "duration_s": 179.6,
+      "new_best": true,
+      "patience": 0,
+      "class_metrics": {
+        "background":       {"IoU": 0.536, "Dice": 0.698},
+        "building flooded": {"IoU": 0.356, "Dice": 0.525},
+        "grass":            {"IoU": 0.578, "Dice": 0.732},
+        "pool":             {"IoU": 0.269, "Dice": 0.424},
+        "road flooded":     {"IoU": 0.368, "Dice": 0.538},
+        "tree":             {"IoU": 0.561, "Dice": 0.719},
+        "vehicle":          {"IoU": 0.156, "Dice": 0.270},
+        "water":            {"IoU": 0.102, "Dice": 0.185}
+      }
+    },
+    {
+      "epoch": 20,
+      "train_loss": 0.5135,
+      "val_loss": 0.8270,
+      "mIoU": 0.3608,
+      "lr": 3.87e-04,
+      "duration_s": 185.4,
+      "new_best": false,
+      "patience": 1,
+      "class_metrics": {
+        "background":       {"IoU": 0.529, "Dice": 0.692},
+        "building flooded": {"IoU": 0.374, "Dice": 0.544},
+        "grass":            {"IoU": 0.589, "Dice": 0.741},
+        "pool":             {"IoU": 0.273, "Dice": 0.429},
+        "road flooded":     {"IoU": 0.393, "Dice": 0.564},
+        "tree":             {"IoU": 0.558, "Dice": 0.716},
+        "vehicle":          {"IoU": 0.106, "Dice": 0.191},
+        "water":            {"IoU": 0.066, "Dice": 0.123}
+      }
+    },
+    {
+      "epoch": 21,
+      "train_loss": 0.4998,
+      "val_loss": 0.8017,
+      "mIoU": 0.3662,
+      "lr": 3.95e-04,
+      "duration_s": null,
+      "new_best": true,
+      "patience": 0,
+      "class_metrics": {
+        "background":       {"IoU": 0.523, "Dice": 0.687},
+        "building flooded": {"IoU": 0.375, "Dice": 0.545},
+        "grass":            {"IoU": 0.567, "Dice": 0.723},
+        "pool":             {"IoU": 0.314, "Dice": 0.478},
+        "road flooded":     {"IoU": 0.430, "Dice": 0.602},
+        "tree":             {"IoU": 0.553, "Dice": 0.712},
+        "vehicle":          {"IoU": 0.109, "Dice": 0.197},
+        "water":            {"IoU": 0.059, "Dice": 0.112}
+      }
+    },
+    {
+      "epoch": 22,
+      "train_loss": 0.4988,
+      "val_loss": 0.7999,
+      "mIoU": 0.3795,
+      "lr": 3.94e-04,
+      "duration_s": null,
+      "new_best": true,
+      "patience": 0,
+      "class_metrics": {
+        "background":       {"IoU": 0.545, "Dice": 0.705},
+        "building flooded": {"IoU": 0.373, "Dice": 0.543},
+        "grass":            {"IoU": 0.598, "Dice": 0.749},
+        "pool":             {"IoU": 0.291, "Dice": 0.451},
+        "road flooded":     {"IoU": 0.439, "Dice": 0.610},
+        "tree":             {"IoU": 0.575, "Dice": 0.730},
+        "vehicle":          {"IoU": 0.173, "Dice": 0.295},
+        "water":            {"IoU": 0.041, "Dice": 0.079}
+      }
+    },
+    {
+      "epoch": 23,
+      "train_loss": 0.5004,
+      "val_loss": 0.7988,
+      "mIoU": 0.3600,
+      "lr": 3.93e-04,
+      "duration_s": null,
+      "new_best": false,
+      "patience": 1,
+      "class_metrics": {
+        "background":       {"IoU": 0.512, "Dice": 0.677},
+        "building flooded": {"IoU": 0.393, "Dice": 0.564},
+        "grass":            {"IoU": 0.597, "Dice": 0.747},
+        "pool":             {"IoU": 0.236, "Dice": 0.381},
+        "road flooded":     {"IoU": 0.429, "Dice": 0.600},
+        "tree":             {"IoU": 0.528, "Dice": 0.691},
+        "vehicle":          {"IoU": 0.143, "Dice": 0.250},
+        "water":            {"IoU": 0.045, "Dice": 0.086}
+      }
+    },
+    {
+      "epoch": 24,
+      "train_loss": 0.4749,
+      "val_loss": 0.8201,
+      "mIoU": 0.3821,
+      "lr": 3.91e-04,
+      "duration_s": null,
+      "new_best": true,
+      "patience": 0,
+      "class_metrics": {
+        "background":       {"IoU": 0.538, "Dice": 0.700},
+        "building flooded": {"IoU": 0.408, "Dice": 0.579},
+        "grass":            {"IoU": 0.589, "Dice": 0.741},
+        "pool":             {"IoU": 0.285, "Dice": 0.444},
+        "road flooded":     {"IoU": 0.416, "Dice": 0.587},
+        "tree":             {"IoU": 0.565, "Dice": 0.722},
+        "vehicle":          {"IoU": 0.206, "Dice": 0.342},
+        "water":            {"IoU": 0.049, "Dice": 0.093}
+      }
+    },
+    {
+      "epoch": 25,
+      "train_loss": 0.4675,
+      "val_loss": 0.8340,
+      "mIoU": 0.3645,
+      "lr": 3.90e-04,
+      "duration_s": null,
+      "new_best": false,
+      "patience": 2,
+      "class_metrics": {
+        "background":       {"IoU": 0.539, "Dice": 0.701},
+        "building flooded": {"IoU": 0.387, "Dice": 0.558},
+        "grass":            {"IoU": 0.594, "Dice": 0.745},
+        "pool":             {"IoU": 0.276, "Dice": 0.433},
+        "road flooded":     {"IoU": 0.393, "Dice": 0.564},
+        "tree":             {"IoU": 0.512, "Dice": 0.677},
+        "vehicle":          {"IoU": 0.192, "Dice": 0.322},
+        "water":            {"IoU": 0.024, "Dice": 0.047}
+      }
+    },
+    {
+      "epoch": 26,
+      "train_loss": 0.4626,
+      "val_loss": 0.8157,
+      "mIoU": 0.3652,
+      "lr": 3.88e-04,
+      "duration_s": null,
+      "new_best": false,
+      "patience": 3,
+      "class_metrics": {
+        "background":       {"IoU": 0.550, "Dice": 0.709},
+        "building flooded": {"IoU": 0.397, "Dice": 0.568},
+        "grass":            {"IoU": 0.563, "Dice": 0.720},
+        "pool":             {"IoU": 0.303, "Dice": 0.465},
+        "road flooded":     {"IoU": 0.427, "Dice": 0.599},
+        "tree":             {"IoU": 0.535, "Dice": 0.697},
+        "vehicle":          {"IoU": 0.108, "Dice": 0.196},
+        "water":            {"IoU": 0.038, "Dice": 0.072}
+      }
+    },
+    {
+      "epoch": 27,
+      "train_loss": 0.4512,
+      "val_loss": 0.8183,
+      "mIoU": 0.3719,
+      "lr": 3.87e-04,
+      "duration_s": null,
+      "new_best": false,
+      "patience": 4,
+      "class_metrics": {
+        "background":       {"IoU": 0.567, "Dice": 0.724},
+        "building flooded": {"IoU": 0.381, "Dice": 0.552},
+        "grass":            {"IoU": 0.581, "Dice": 0.735},
+        "pool":             {"IoU": 0.316, "Dice": 0.480},
+        "road flooded":     {"IoU": 0.406, "Dice": 0.577},
+        "tree":             {"IoU": 0.549, "Dice": 0.709},
+        "vehicle":          {"IoU": 0.115, "Dice": 0.206},
+        "water":            {"IoU": 0.061, "Dice": 0.114}
+      }
+    },
+    {
+      "epoch": 28,
+      "train_loss": 0.4431,
+      "val_loss": 0.8150,
+      "mIoU": 0.3710,
+      "lr": 3.85e-04,
+      "duration_s": null,
+      "new_best": false,
+      "patience": 5,
+      "class_metrics": {
+        "background":       {"IoU": 0.519, "Dice": 0.683},
+        "building flooded": {"IoU": 0.383, "Dice": 0.554},
+        "grass":            {"IoU": 0.604, "Dice": 0.753},
+        "pool":             {"IoU": 0.316, "Dice": 0.481},
+        "road flooded":     {"IoU": 0.436, "Dice": 0.607},
+        "tree":             {"IoU": 0.536, "Dice": 0.698},
+        "vehicle":          {"IoU": 0.122, "Dice": 0.218},
+        "water":            {"IoU": 0.052, "Dice": 0.099}
+      }
+    },
+    {
+      "epoch": 29,
+      "train_loss": 0.4308,
+      "val_loss": 0.8274,
+      "mIoU": 0.3743,
+      "lr": 3.83e-04,
+      "duration_s": null,
+      "new_best": false,
+      "patience": 6,
+      "class_metrics": {
+        "background":       {"IoU": 0.532, "Dice": 0.695},
+        "building flooded": {"IoU": 0.388, "Dice": 0.559},
+        "grass":            {"IoU": 0.607, "Dice": 0.756},
+        "pool":             {"IoU": 0.304, "Dice": 0.466},
+        "road flooded":     {"IoU": 0.430, "Dice": 0.602},
+        "tree":             {"IoU": 0.554, "Dice": 0.713},
+        "vehicle":          {"IoU": 0.145, "Dice": 0.253},
+        "water":            {"IoU": 0.033, "Dice": 0.065}
+      }
+    },
+    {
+      "epoch": 30,
+      "train_loss": 0.4313,
+      "val_loss": 0.8797,
+      "mIoU": 0.3885,
+      "lr": 3.81e-04,
+      "duration_s": null,
+      "new_best": true,
+      "patience": 0,
+      "class_metrics": {
+        "background":       {"IoU": 0.576, "Dice": 0.731},
+        "building flooded": {"IoU": 0.366, "Dice": 0.536},
+        "grass":            {"IoU": 0.610, "Dice": 0.758},
+        "pool":             {"IoU": 0.307, "Dice": 0.469},
+        "road flooded":     {"IoU": 0.418, "Dice": 0.590},
+        "tree":             {"IoU": 0.558, "Dice": 0.716},
+        "vehicle":          {"IoU": 0.191, "Dice": 0.320},
+        "water":            {"IoU": 0.083, "Dice": 0.153}
+      }
+    },
+    {
+      "epoch": 31,
+      "train_loss": 0.4324,
+      "val_loss": 0.7947,
+      "mIoU": 0.3662,
+      "lr": 3.79e-04,
+      "duration_s": null,
+      "new_best": false,
+      "patience": 7,
+      "class_metrics": {
+        "background":       {"IoU": 0.518, "Dice": 0.682},
+        "building flooded": {"IoU": 0.377, "Dice": 0.548},
+        "grass":            {"IoU": 0.614, "Dice": 0.761},
+        "pool":             {"IoU": 0.288, "Dice": 0.448},
+        "road flooded":     {"IoU": 0.410, "Dice": 0.581},
+        "tree":             {"IoU": 0.575, "Dice": 0.730},
+        "vehicle":          {"IoU": 0.116, "Dice": 0.207},
+        "water":            {"IoU": 0.032, "Dice": 0.062}
+      }
+    },
+    {
+      "epoch": 32,
+      "train_loss": 0.4221,
+      "val_loss": 0.8358,
+      "mIoU": 0.3807,
+      "lr": 3.77e-04,
+      "duration_s": null,
+      "new_best": false,
+      "patience": 8,
+      "class_metrics": {
+        "background":       {"IoU": 0.556, "Dice": 0.715},
+        "building flooded": {"IoU": 0.389, "Dice": 0.560},
+        "grass":            {"IoU": 0.609, "Dice": 0.757},
+        "pool":             {"IoU": 0.309, "Dice": 0.472},
+        "road flooded":     {"IoU": 0.409, "Dice": 0.580},
+        "tree":             {"IoU": 0.566, "Dice": 0.723},
+        "vehicle":          {"IoU": 0.153, "Dice": 0.265},
+        "water":            {"IoU": 0.055, "Dice": 0.104}
+      }
+    },
+    {
+      "epoch": 33,
+      "train_loss": 0.4133,
+      "val_loss": 0.8806,
+      "mIoU": 0.3702,
+      "lr": 3.74e-04,
+      "duration_s": null,
+      "new_best": false,
+      "patience": 9,
+      "class_metrics": {
+        "background":       {"IoU": 0.549, "Dice": 0.709},
+        "building flooded": {"IoU": 0.388, "Dice": 0.559},
+        "grass":            {"IoU": 0.607, "Dice": 0.756},
+        "pool":             {"IoU": 0.287, "Dice": 0.446},
+        "road flooded":     {"IoU": 0.386, "Dice": 0.557},
+        "tree":             {"IoU": 0.552, "Dice": 0.711},
+        "vehicle":          {"IoU": 0.160, "Dice": 0.276},
+        "water":            {"IoU": 0.031, "Dice": 0.060}
+      }
+    },
+    {
+      "epoch": 34,
+      "train_loss": 0.4274,
+      "val_loss": 0.8361,
+      "mIoU": 0.3648,
+      "lr": 3.72e-04,
+      "duration_s": null,
+      "new_best": false,
+      "patience": 10,
+      "early_stopped": true,
+      "class_metrics": {
+        "background":       {"IoU": 0.541, "Dice": 0.702},
+        "building flooded": {"IoU": 0.355, "Dice": 0.524},
+        "grass":            {"IoU": 0.587, "Dice": 0.740},
+        "pool":             {"IoU": 0.274, "Dice": 0.430},
+        "road flooded":     {"IoU": 0.428, "Dice": 0.599},
+        "tree":             {"IoU": 0.566, "Dice": 0.723},
+        "vehicle":          {"IoU": 0.106, "Dice": 0.192},
+        "water":            {"IoU": 0.061, "Dice": 0.115}
+      }
+    }
+  ]
+}

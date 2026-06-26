@@ -1,0 +1,887 @@
+
+==================================================
+CELL 1 (CODE)
+==================================================
+
+from google.colab import drive
+drive.mount('/content/drive', force_remount=True)
+
+import os
+import sys
+import random
+import math
+import json
+import numpy as np
+import pandas as pd
+from PIL import Image
+from collections import Counter
+from tqdm.notebook import tqdm
+import warnings
+warnings.filterwarnings('ignore')
+
+import torch
+import torch.nn as nn
+import torch.nn.functional as F
+from torch.utils.data import Dataset, DataLoader
+from torch.utils.data.sampler import BatchSampler
+from torch.optim import AdamW
+from torch.amp import GradScaler, autocast
+
+import albumentations as A
+from albumentations.pytorch import ToTensorV2
+from transformers import Mask2FormerForUniversalSegmentation, Mask2FormerImageProcessor
+
+print(f"PyTorch {torch.__version__}, CUDA: {torch.cuda.is_available()}")
+print(f"GPU: {torch.cuda.get_device_name(0)}")
+print(f"Memory: {torch.cuda.get_device_properties(0).total_mem / 1e9:.1f} GB")
+
+
+==================================================
+CELL 2 (CODE)
+==================================================
+
+import zipfile
+
+ZIP_PATH = '/content/drive/MyDrive/flood_segmentation/dolanan-data-nexus-2026.zip'
+EXTRACT_PATH = '/content/flood_project'
+
+if not os.path.exists(f'{EXTRACT_PATH}/Dataset_Nexus_DolananData'):
+    os.makedirs(EXTRACT_PATH, exist_ok=True)
+    print("Extracting (5-10 menit)...")
+    with zipfile.ZipFile(ZIP_PATH, 'r') as z:
+        z.extractall(EXTRACT_PATH)
+    print("Done")
+else:
+    print("Already extracted")
+
+def set_seed(seed=42):
+    random.seed(seed)
+    np.random.seed(seed)
+    torch.manual_seed(seed)
+    torch.cuda.manual_seed_all(seed)
+    torch.backends.cudnn.deterministic = True
+    torch.backends.cudnn.benchmark = False
+    os.environ['PYTHONHASHSEED'] = str(seed)
+
+set_seed(42)
+
+
+==================================================
+CELL 3 (CODE)
+==================================================
+
+possible_paths = [
+    "/content/flood_project/Dataset_Nexus_DolananData",
+    "/content/drive/MyDrive/flood_segmentation/Dataset_Nexus_DolananData",
+]
+BASE_PATH = None
+for p in possible_paths:
+    if os.path.exists(p):
+        BASE_PATH = p
+        break
+if BASE_PATH is None:
+    raise FileNotFoundError("Dataset not found")
+print(f"BASE_PATH: {BASE_PATH}")
+
+def find_mask_dir(base):
+    for item in os.listdir(base):
+        if item.startswith('train-'):
+            train_path = os.path.join(base, item)
+            for sub in os.listdir(train_path):
+                train_dir = os.path.join(train_path, sub)
+                if os.path.isdir(train_dir):
+                    for name in ["masks", "mask"]:
+                        if os.path.isdir(os.path.join(train_dir, name)):
+                            return name
+    raise FileNotFoundError("mask/masks folder not found")
+
+MASK_DIR = find_mask_dir(BASE_PATH)
+
+train_folder = val_folder = test_folder = None
+for item in os.listdir(BASE_PATH):
+    item_path = os.path.join(BASE_PATH, item)
+    if os.path.isdir(item_path):
+        if item.startswith('train-'): train_folder = item
+        elif item.startswith('validation-'): val_folder = item
+        elif item.startswith('test-'): test_folder = item
+
+TRAIN_IMG  = os.path.join(BASE_PATH, train_folder, "train", "img")
+TRAIN_MASK = os.path.join(BASE_PATH, train_folder, "train", MASK_DIR)
+VAL_IMG    = os.path.join(BASE_PATH, val_folder, "validation", "img")
+VAL_MASK   = os.path.join(BASE_PATH, val_folder, "validation", MASK_DIR)
+test_mid   = os.listdir(os.path.join(BASE_PATH, test_folder))[0]
+TEST_IMG   = os.path.join(BASE_PATH, test_folder, test_mid, "test", "img")
+
+CLASS_NAMES = {
+    0: "background", 1: "building flooded", 2: "building non-flooded",
+    3: "grass", 4: "pool", 5: "road flooded",
+    6: "road non-flooded", 7: "tree", 8: "vehicle", 9: "water"
+}
+NUM_CLASSES = 10
+EMPTY_CLASSES = {2, 6}
+RARE_CLASSES = {4, 8, 9}
+CLASS_WEIGHTS = torch.tensor([0.3, 1.0, 0.0, 0.5, 3.0, 0.8, 0.0, 1.2, 15.0, 20.0], dtype=torch.float32)
+
+# FIX: Swin-Base pretrained with ImageNet stats — must match
+MEAN = [0.485, 0.456, 0.406]
+STD  = [0.229, 0.224, 0.225]
+
+MODEL_NAME = "facebook/mask2former-swin-base-ade-semantic"
+
+TRAIN_CONFIG = {
+    'num_epochs': 35,
+    'lr_backbone': 3e-5,        # FIX: lower for pretrained Swin encoder
+    'lr_head': 1e-4,
+    'weight_decay': 0.01,
+    'grad_clip': 1.0,
+    'save_dir': '/content/drive/MyDrive/flood_segmentation/checkpoints_mask2former',
+    'early_stop_patience': 12,
+    'accumulation_steps': 8,
+    'lovasz_weight': 0.75,
+    'rare_ratio': 0.40,
+    'water_ratio': 0.15,
+    'batch_size': 2,
+    'poly_power': 0.9,
+    'warmup_steps': 500,        # NEW: linear warmup for AMP stability
+}
+
+os.makedirs(TRAIN_CONFIG['save_dir'], exist_ok=True)
+print(f"TRAIN_IMG: {TRAIN_IMG}\nVAL_IMG: {VAL_IMG}\nTEST_IMG: {TEST_IMG}")
+print(f"MASK_DIR: {MASK_DIR}\nModel: {MODEL_NAME}\nConfig ready")
+
+
+==================================================
+CELL 4 (CODE)
+==================================================
+
+def lovasz_grad(gt_sorted):
+    p = len(gt_sorted)
+    gts = gt_sorted.sum()
+    intersection = gts - gt_sorted.float().cumsum(0)
+    union = gts + (1 - gt_sorted).float().cumsum(0)
+    jaccard = 1.0 - intersection / union
+    if p > 1:
+        jaccard[1:p] = jaccard[1:p] - jaccard[0:-1]
+    return jaccard
+
+def lovasz_softmax_flat(probas, labels, classes='present', empty_classes=None):
+    if empty_classes is None:
+        empty_classes = set()
+    if classes == 'present':
+        all_present = labels.unique()
+        classes = [c.item() for c in all_present if c.item() not in empty_classes]
+        if len(classes) == 0:
+            return torch.tensor(0.0, device=probas.device)
+    loss = 0.0
+    for c in classes:
+        fg = (labels == c).float()
+        if fg.sum() == 0:
+            continue
+        probas_class = probas[:, c]
+        errors = (fg - probas_class).abs()
+        errors_sorted, perm = torch.sort(errors, dim=0, descending=True)
+        fg_sorted = fg[perm]
+        loss += torch.dot(errors_sorted, lovasz_grad(fg_sorted))
+    return loss / max(len(classes), 1)
+
+def lovasz_softmax(logits, labels, ignore=None, empty_classes=None):
+    probas = F.softmax(logits, dim=1)
+    B, C, H, W = probas.shape
+    probas = probas.permute(0, 2, 3, 1).reshape(-1, C)
+    labels = labels.reshape(-1)
+    if ignore is not None:
+        valid = labels != ignore
+        probas = probas[valid]
+        labels = labels[valid]
+    return lovasz_softmax_flat(probas, labels, classes='present', empty_classes=empty_classes)
+
+class FloodSegLoss(nn.Module):
+    def __init__(self, class_weights, lovasz_weight=0.75, empty_classes=None):
+        super().__init__()
+        self.lovasz_weight = lovasz_weight
+        self.ce_weight = 1.0 - lovasz_weight
+        self.ce_loss = nn.CrossEntropyLoss(weight=class_weights, ignore_index=255, reduction='mean')
+        self.empty_classes = empty_classes
+
+    def forward(self, logits, labels):
+        logits_fp32 = logits.float()
+        ce = self.ce_loss(logits_fp32, labels)
+        lovasz = lovasz_softmax(logits_fp32, labels, ignore=255, empty_classes=self.empty_classes)
+        total = self.lovasz_weight * lovasz + self.ce_weight * ce
+        return total, ce, lovasz
+
+loss_fn = FloodSegLoss(CLASS_WEIGHTS, lovasz_weight=TRAIN_CONFIG['lovasz_weight'], empty_classes=EMPTY_CLASSES)
+print(f"Loss: {TRAIN_CONFIG['lovasz_weight']}*Lovasz + {1-TRAIN_CONFIG['lovasz_weight']}*WCE")
+
+==================================================
+CELL 5 (CODE)
+==================================================
+
+train_transform = A.Compose([
+    A.Resize(512, 512),
+    A.HorizontalFlip(p=0.5),
+    A.RandomRotate90(p=0.2),
+    A.ShiftScaleRotate(shift_limit=0.0625, scale_limit=0.1, rotate_limit=15, p=0.5, border_mode=0),
+    A.RandomBrightnessContrast(brightness_limit=0.15, contrast_limit=0.15, p=0.5),
+    A.GaussNoise(std_range=(0.01, 0.05), p=0.3),
+    A.Normalize(mean=MEAN, std=STD),
+    ToTensorV2(),
+])
+
+val_transform = A.Compose([
+    A.Resize(512, 512),
+    A.Normalize(mean=MEAN, std=STD),
+    ToTensorV2(),
+])
+
+print("Augmentations ready")
+
+==================================================
+CELL 6 (CODE)
+==================================================
+
+class FloodSegDataset(Dataset):
+    def __init__(self, img_dir, mask_dir, transform=None, image_ids=None):
+        self.img_dir = img_dir
+        self.mask_dir = mask_dir
+        self.transform = transform
+        all_ids = sorted([os.path.splitext(f)[0] for f in os.listdir(img_dir) if f.endswith('.jpg')])
+        self.ids = image_ids if image_ids is not None else all_ids
+
+        self.rare_classes_in_image = {}
+        self.water_in_image = set()
+        for img_id in tqdm(self.ids, desc="Indexing"):
+            mask_path = os.path.join(mask_dir, f"{img_id}.png")
+            if os.path.exists(mask_path):
+                mask = np.array(Image.open(mask_path))
+                mask[(mask >= NUM_CLASSES) & (mask != 255)] = 0
+                unique = np.unique(mask)
+                self.rare_classes_in_image[img_id] = set(unique) & RARE_CLASSES
+                if 9 in unique:
+                    self.water_in_image.add(img_id)
+            else:
+                self.rare_classes_in_image[img_id] = set()
+
+    def __len__(self):
+        return len(self.ids)
+
+    def __getitem__(self, idx):
+        img_id = self.ids[idx]
+        img = np.array(Image.open(os.path.join(self.img_dir, f"{img_id}.jpg")).convert('RGB'))
+        mask = np.array(Image.open(os.path.join(self.mask_dir, f"{img_id}.png")))
+        mask[(mask >= NUM_CLASSES) & (mask != 255)] = 0
+        if self.transform:
+            transformed = self.transform(image=img, mask=mask)
+            img = transformed['image']
+            mask = transformed['mask'].long()
+        return img, mask, img_id
+
+    def get_rare_indices(self):
+        return [i for i, img_id in enumerate(self.ids) if len(self.rare_classes_in_image.get(img_id, set())) > 0]
+
+    def get_water_indices(self):
+        return [i for i, img_id in enumerate(self.ids) if img_id in self.water_in_image]
+
+    def get_normal_indices(self):
+        rare = set(self.get_rare_indices())
+        return [i for i in range(len(self.ids)) if i not in rare]
+
+class FloodTestDataset(Dataset):
+    def __init__(self, img_dir, transform=None):
+        self.img_dir = img_dir
+        self.transform = transform
+        self.ids = sorted([os.path.splitext(f)[0] for f in os.listdir(img_dir) if f.endswith('.jpg')])
+
+    def __len__(self):
+        return len(self.ids)
+
+    def __getitem__(self, idx):
+        img_id = self.ids[idx]
+        img = np.array(Image.open(os.path.join(self.img_dir, f"{img_id}.jpg")).convert('RGB'))
+        if self.transform:
+            img = self.transform(image=img)['image']
+        return img, img_id
+
+print("Dataset ready")
+
+==================================================
+CELL 7 (CODE)
+==================================================
+
+class BalancedBatchSampler(BatchSampler):
+    def __init__(self, dataset, batch_size, rare_ratio=0.40, water_ratio=0.15, drop_last=True):
+        self.dataset = dataset
+        self.batch_size = batch_size
+        self.rare_ratio = rare_ratio
+        self.water_ratio = water_ratio
+        self.drop_last = drop_last
+        self.rare_indices = dataset.get_rare_indices()
+        self.water_indices = dataset.get_water_indices()
+        self.water_set = set(self.water_indices)
+        self.normal_indices = dataset.get_normal_indices()
+        print(f"Sampler: {len(self.rare_indices)} rare, {len(self.water_indices)} water, {len(self.normal_indices)} normal")
+
+    def __iter__(self):
+        n_water = max(1, int(self.batch_size * self.water_ratio))
+        n_rare = max(1, int(self.batch_size * self.rare_ratio)) - n_water
+        n_normal = self.batch_size - n_water - n_rare
+
+        water_pool = self.water_indices.copy()
+        rare_pool = [i for i in self.rare_indices if i not in self.water_set]
+        normal_pool = self.normal_indices.copy()
+
+        random.shuffle(water_pool)
+        random.shuffle(rare_pool)
+        random.shuffle(normal_pool)
+
+        i_water, i_rare, i_normal = 0, 0, 0
+        n_batches = len(self)
+
+        for _ in range(n_batches):
+            batch = []
+            for _ in range(n_water):
+                if i_water >= len(water_pool):
+                    random.shuffle(water_pool)
+                    i_water = 0
+                batch.append(water_pool[i_water])
+                i_water += 1
+            for _ in range(n_rare):
+                if i_rare >= len(rare_pool):
+                    random.shuffle(rare_pool)
+                    i_rare = 0
+                batch.append(rare_pool[i_rare])
+                i_rare += 1
+            for _ in range(n_normal):
+                if i_normal >= len(normal_pool):
+                    random.shuffle(normal_pool)
+                    i_normal = 0
+                batch.append(normal_pool[i_normal])
+                i_normal += 1
+            random.shuffle(batch)
+            yield batch
+
+    def __len__(self):
+        return len(self.dataset) // self.batch_size
+
+print("Sampler ready")
+
+==================================================
+CELL 8 (CODE)
+==================================================
+
+train_ids = sorted([os.path.splitext(f)[0] for f in os.listdir(TRAIN_IMG) if f.endswith('.jpg')])
+val_ids   = sorted([os.path.splitext(f)[0] for f in os.listdir(VAL_IMG) if f.endswith('.jpg')])
+
+train_dataset = FloodSegDataset(TRAIN_IMG, TRAIN_MASK, transform=train_transform, image_ids=train_ids)
+val_dataset   = FloodSegDataset(VAL_IMG, VAL_MASK, transform=val_transform, image_ids=val_ids)
+test_dataset  = FloodTestDataset(TEST_IMG)
+
+num_workers = 2
+
+train_sampler = BalancedBatchSampler(
+    train_dataset,
+    batch_size=TRAIN_CONFIG['batch_size'],
+    rare_ratio=TRAIN_CONFIG['rare_ratio'],
+    water_ratio=TRAIN_CONFIG['water_ratio'],
+    drop_last=True
+)
+
+train_loader = DataLoader(train_dataset, batch_sampler=train_sampler, num_workers=num_workers, pin_memory=True)
+val_loader   = DataLoader(val_dataset, batch_size=TRAIN_CONFIG['batch_size'], shuffle=False, num_workers=num_workers, pin_memory=True)
+
+print(f"Train: {len(train_dataset)} -> {len(train_loader)} batches")
+print(f"Val:   {len(val_dataset)} -> {len(val_loader)} batches")
+print(f"Test:  {len(test_dataset)} images")
+
+==================================================
+CELL 9 (CODE)
+==================================================
+
+class Mask2FormerFlood(nn.Module):
+    def __init__(self, num_classes=10, model_name=MODEL_NAME):
+        super().__init__()
+        self.model = Mask2FormerForUniversalSegmentation.from_pretrained(
+            model_name,
+            num_labels=num_classes,
+            ignore_mismatched_sizes=True,
+            id2label={i: CLASS_NAMES[i] for i in range(num_classes)},
+            label2id={CLASS_NAMES[i]: i for i in range(num_classes)},
+        )
+
+    def forward(self, pixel_values):
+        outputs = self.model(pixel_values=pixel_values)
+        masks = outputs.masks_queries_logits
+        class_logits = outputs.class_queries_logits
+
+        class_probs = F.softmax(class_logits, dim=-1)[:, :, :-1]
+        mask_probs = masks.sigmoid()
+
+        B, N, C = class_probs.shape
+        _, _, H, W = mask_probs.shape
+
+        class_probs_rs = class_probs.permute(0, 2, 1)
+        mask_probs_flat = mask_probs.view(B, N, H * W)
+        seg_maps = torch.bmm(class_probs_rs, mask_probs_flat).view(B, C, H, W)
+
+        seg_maps = F.interpolate(
+            seg_maps,
+            size=pixel_values.shape[-2:],
+            mode='bilinear',
+            align_corners=False
+        )
+        return seg_maps
+
+def init_model(device='cuda'):
+    model = Mask2FormerFlood(num_classes=NUM_CLASSES)
+    return model.to(device)
+
+print("Mask2Former model ready")
+
+==================================================
+CELL 10 (CODE)
+==================================================
+
+def rle_encode(mask):
+    pixels = mask.flatten(order='F')
+    pixels = np.concatenate([[0], pixels, [0]])
+    runs = np.where(pixels[1:] != pixels[:-1])[0] + 1
+    runs[1::2] -= runs[0::2]
+    return ' '.join(str(x) for x in runs)
+
+def mask_to_rle(mask, empty_classes=None):
+    if empty_classes is None:
+        empty_classes = set()
+    result = {}
+    for cls_id in range(NUM_CLASSES):
+        if cls_id in empty_classes:
+            result[cls_id] = ''
+        else:
+            binary = (mask == cls_id).astype(np.uint8)
+            result[cls_id] = rle_encode(binary) if binary.sum() > 0 else ''
+    return result
+
+print("RLE ready")
+
+==================================================
+CELL 11 (CODE)
+==================================================
+
+class FloodSegMetrics:
+    def __init__(self, num_classes, ignore_classes=None):
+        self.num_classes = num_classes
+        self.ignore_classes = ignore_classes if ignore_classes else set()
+        self.reset()
+
+    def reset(self):
+        self.confusion_matrix = np.zeros((self.num_classes, self.num_classes), dtype=np.int64)
+
+    def update(self, preds, targets):
+        preds = preds.flatten()
+        targets = targets.flatten()
+        mask = ~np.isin(targets, list(self.ignore_classes))
+        preds, targets = preds[mask], targets[mask]
+        indices = self.num_classes * targets + preds
+        m = np.bincount(indices, minlength=self.num_classes ** 2)
+        self.confusion_matrix += m.reshape(self.num_classes, self.num_classes)
+
+    def compute_iou(self):
+        intersection = np.diag(self.confusion_matrix)
+        union = self.confusion_matrix.sum(axis=1) + self.confusion_matrix.sum(axis=0) - intersection
+        iou = np.zeros(self.num_classes)
+        valid = union > 0
+        iou[valid] = intersection[valid] / union[valid]
+        return iou
+
+    def compute_miou(self):
+        ious = self.compute_iou()
+        valid_classes = ~np.isin(np.arange(self.num_classes), list(self.ignore_classes))
+        return np.mean(ious[valid_classes])
+
+    def compute_dice(self):
+        intersection = np.diag(self.confusion_matrix)
+        sum_rows = self.confusion_matrix.sum(axis=1)
+        sum_cols = self.confusion_matrix.sum(axis=0)
+        dice = np.zeros(self.num_classes)
+        valid = (sum_rows + sum_cols) > 0
+        dice[valid] = 2 * intersection[valid] / (sum_rows[valid] + sum_cols[valid])
+        return dice
+
+
+# FIX: pixel_level_module.encoder IS the Swin backbone — gets LOWER lr
+# Everything else (pixel decoder, transformer decoder, class heads) gets HIGHER lr
+def configure_optimizer(model, lr_backbone=3e-5, lr_head=1e-4, weight_decay=0.01):
+    backbone_params = []
+    head_params = []
+    for n, p in model.named_parameters():
+        if not p.requires_grad:
+            continue
+        if 'pixel_level_module.encoder' in n:
+            backbone_params.append(p)
+        else:
+            head_params.append(p)
+    param_groups = [
+        {'params': backbone_params, 'lr': lr_backbone},
+        {'params': head_params, 'lr': lr_head},
+    ]
+    print(f"Optimizer: {len(backbone_params)} backbone params (lr={lr_backbone}), "
+          f"{len(head_params)} head params (lr={lr_head})")
+    return AdamW(param_groups, weight_decay=weight_decay)
+
+
+# FIX: total_steps must count OPTIMIZER steps (accounting for grad accum)
+# FIX: Added linear warmup to prevent early gradient instability with AMP
+def get_poly_scheduler(optimizer, num_epochs, steps_per_epoch, accum_steps=1, power=0.9, warmup_steps=500):
+    total_optimizer_steps = num_epochs * (steps_per_epoch // accum_steps)
+
+    def lr_lambda(current_step):
+        if current_step < warmup_steps:
+            return max(1e-6, current_step / max(warmup_steps, 1))
+        adjusted = current_step - warmup_steps
+        total_after_warmup = max(total_optimizer_steps - warmup_steps, 1)
+        return max(0.0, (1 - adjusted / total_after_warmup) ** power)
+
+    print(f"Scheduler: {total_optimizer_steps} optimizer steps, {warmup_steps} warmup")
+    return torch.optim.lr_scheduler.LambdaLR(optimizer, lr_lambda)
+
+print("Metrics & optimizer ready")
+
+
+==================================================
+CELL 12 (CODE)
+==================================================
+
+class Trainer:
+    def __init__(self, model, train_loader, val_loader, loss_fn, optimizer, scheduler, device, config, use_amp=True):
+        self.model = model
+        self.train_loader = train_loader
+        self.val_loader = val_loader
+        self.loss_fn = loss_fn
+        self.optimizer = optimizer
+        self.scheduler = scheduler
+        self.device = device
+        self.config = config
+        self.use_amp = use_amp and device.type == 'cuda'
+        self.scaler = GradScaler('cuda') if self.use_amp else None
+        self.metrics = FloodSegMetrics(NUM_CLASSES, EMPTY_CLASSES)
+        self.best_miou = 0.0
+        self.best_smoothed_val_loss = float('inf')
+        self.patience_counter = 0
+        self.history = {'train_loss': [], 'val_loss': [], 'val_miou': [], 'lr_backbone': [], 'lr_head': [], 'class_iou': []}
+        self.batch_size = config['batch_size']
+        self.accum_steps = config.get('accumulation_steps', 1)
+        self.steps_per_epoch = len(train_loader)
+
+    def train_epoch(self, epoch):
+        self.model.train()
+        total_loss = 0
+        pbar = tqdm(self.train_loader, desc=f'Epoch {epoch}')
+        self.optimizer.zero_grad()
+        for batch_idx, (images, masks, _) in enumerate(pbar):
+            images = images.to(self.device)
+            masks = masks.to(self.device)
+            if self.use_amp:
+                with autocast('cuda'):
+                    logits = self.model(images)
+                    loss, ce_loss, lovasz_loss = self.loss_fn(logits, masks)
+                loss = loss / self.accum_steps
+                self.scaler.scale(loss).backward()
+                if (batch_idx + 1) % self.accum_steps == 0:
+                    self.scaler.unscale_(self.optimizer)
+                    torch.nn.utils.clip_grad_norm_(self.model.parameters(), self.config['grad_clip'])
+                    self.scaler.step(self.optimizer)
+                    self.scheduler.step()
+                    self.scaler.update()
+                    self.optimizer.zero_grad()
+            else:
+                logits = self.model(images)
+                loss, ce_loss, lovasz_loss = self.loss_fn(logits, masks)
+                loss = loss / self.accum_steps
+                loss.backward()
+                if (batch_idx + 1) % self.accum_steps == 0:
+                    torch.nn.utils.clip_grad_norm_(self.model.parameters(), self.config['grad_clip'])
+                    self.optimizer.step()
+                    self.scheduler.step()
+                    self.optimizer.zero_grad()
+            total_loss += loss.item() * self.accum_steps
+            lr_backbone = self.optimizer.param_groups[0]['lr']
+            lr_head = self.optimizer.param_groups[1]['lr']
+            pbar.set_postfix({'loss': f'{loss.item()*self.accum_steps:.4f}', 'lr_b': f'{lr_backbone:.2e}', 'lr_h': f'{lr_head:.2e}'})
+
+        if (batch_idx + 1) % self.accum_steps != 0:
+            if self.use_amp:
+                self.scaler.unscale_(self.optimizer)
+                torch.nn.utils.clip_grad_norm_(self.model.parameters(), self.config['grad_clip'])
+                self.scaler.step(self.optimizer)
+                self.scaler.update()
+            else:
+                torch.nn.utils.clip_grad_norm_(self.model.parameters(), self.config['grad_clip'])
+                self.optimizer.step()
+            self.scheduler.step()
+            self.optimizer.zero_grad()
+
+        return total_loss / len(self.train_loader)
+
+    @torch.no_grad()
+    def validate(self, verbose=True):
+        self.model.eval()
+        self.metrics.reset()
+        total_loss = 0
+        pbar = tqdm(self.val_loader, desc='Validating', leave=False)
+        for images, masks, _ in pbar:
+            images = images.to(self.device)
+            masks = masks.to(self.device)
+            logits = self.model(images)
+            loss, _, _ = self.loss_fn(logits, masks)
+            total_loss += loss.item()
+            preds = torch.argmax(logits, dim=1)
+            self.metrics.update(preds.cpu().numpy(), masks.cpu().numpy())
+        avg_loss = total_loss / len(self.val_loader)
+        miou = self.metrics.compute_miou()
+        ious = self.metrics.compute_iou()
+        dice = self.metrics.compute_dice()
+        if verbose:
+            print("\n" + "="*65)
+            print(f"{'Class':<20} {'IoU':>8} {'Dice':>8}")
+            print("-"*40)
+            for c in range(NUM_CLASSES):
+                if c in EMPTY_CLASSES:
+                    continue
+                print(f"{CLASS_NAMES[c][:18]:<20} {ious[c]:>8.3f} {dice[c]:>8.3f}")
+            print("-"*40)
+            print(f"{'mIoU':<20} {miou:>8.3f}")
+            print("="*65)
+        return avg_loss, miou, ious, dice
+
+    def train(self):
+        print(f"Training {self.config['num_epochs']} epochs | Device: {self.device} | AMP: {self.use_amp}")
+        print(f"Batch: {self.batch_size} x {self.accum_steps} = effective {self.batch_size * self.accum_steps}")
+        for epoch in range(1, self.config['num_epochs'] + 1):
+            train_loss = self.train_epoch(epoch)
+            val_loss, val_miou, ious, dice = self.validate(verbose=True)
+            lr_backbone = self.optimizer.param_groups[0]['lr']
+            lr_head = self.optimizer.param_groups[1]['lr']
+
+            self.history['train_loss'].append(train_loss)
+            self.history['val_loss'].append(val_loss)
+            self.history['val_miou'].append(val_miou)
+            self.history['lr_backbone'].append(lr_backbone)
+            self.history['lr_head'].append(lr_head)
+            self.history['class_iou'].append({int(k): float(v) for k, v in enumerate(ious)})
+
+            smoothed_val_loss = np.mean(self.history['val_loss'][-3:]) if len(self.history['val_loss']) >= 3 else val_loss
+
+            print(f"\nEpoch {epoch} | Train: {train_loss:.4f} | Val: {val_loss:.4f} | mIoU: {val_miou:.4f} | LR_b: {lr_backbone:.2e} | LR_h: {lr_head:.2e}")
+
+            checkpoint = {
+                'epoch': epoch,
+                'model_state_dict': self.model.state_dict(),
+                'optimizer_state_dict': self.optimizer.state_dict(),
+                'scheduler_state_dict': self.scheduler.state_dict(),
+                'best_miou': self.best_miou,
+                'best_smoothed_val_loss': self.best_smoothed_val_loss,
+                'history': self.history,
+            }
+            torch.save(checkpoint, os.path.join(self.config['save_dir'], 'last_checkpoint.pth'))
+
+            if val_miou > self.best_miou:
+                self.best_miou = val_miou
+                torch.save(checkpoint, os.path.join(self.config['save_dir'], 'best_miou.pth'))
+                print(f"  New best mIoU: {val_miou:.4f}")
+
+            if smoothed_val_loss < self.best_smoothed_val_loss:
+                self.best_smoothed_val_loss = smoothed_val_loss
+                self.patience_counter = 0
+                torch.save(checkpoint, os.path.join(self.config['save_dir'], 'best_loss.pth'))
+                print(f"  New best smoothed val_loss: {smoothed_val_loss:.4f}")
+            else:
+                self.patience_counter += 1
+                print(f"  Patience: {self.patience_counter}/{self.config['early_stop_patience']}")
+
+            if self.patience_counter >= self.config['early_stop_patience']:
+                print(f"Early stopping at epoch {epoch}")
+                break
+
+        with open(os.path.join(self.config['save_dir'], 'training_history.json'), 'w') as f:
+            json.dump(self.history, f, indent=2)
+        print(f"\nBest mIoU: {self.best_miou:.4f}")
+        return self.history
+
+==================================================
+CELL 13 (CODE)
+==================================================
+
+@torch.no_grad()
+def predict_with_tta(model, img_np, device, scales=[0.75, 1.0, 1.25], base_size=512, use_flip=True):
+    """Multi-scale TTA with actual different input resolutions."""
+    model.eval()
+    H_orig, W_orig = img_np.shape[:2]
+    all_probs = []
+
+    for scale in scales:
+        # FIX: each scale produces a DIFFERENT input resolution
+        size = max(32, int(base_size * scale) // 32 * 32)  # divisible by 32
+
+        transform = A.Compose([
+            A.Resize(size, size),
+            A.Normalize(mean=MEAN, std=STD),
+            ToTensorV2(),
+        ])
+
+        transformed = transform(image=img_np)['image'].unsqueeze(0).to(device)
+        logits = model(transformed)
+        logits = F.interpolate(logits, size=(H_orig, W_orig), mode='bilinear', align_corners=False)
+        probs = F.softmax(logits.float(), dim=1)
+        all_probs.append(probs)
+
+        if use_flip:
+            img_flip = np.fliplr(img_np).copy()
+            transformed_flip = transform(image=img_flip)['image'].unsqueeze(0).to(device)
+            logits_flip = model(transformed_flip)
+            logits_flip = F.interpolate(logits_flip, size=(H_orig, W_orig), mode='bilinear', align_corners=False)
+            probs_flip = F.softmax(logits_flip.float(), dim=1)
+            probs_flip = torch.flip(probs_flip, dims=[-1])
+            all_probs.append(probs_flip)
+
+    avg_probs = torch.stack(all_probs).mean(dim=0)
+    return torch.argmax(avg_probs, dim=1).squeeze(0).cpu().numpy()
+
+
+def generate_submission(model, test_img_dir, test_ids, device, use_tta=True, scales=[0.75, 1.0, 1.25]):
+    model.eval()
+    results = []
+
+    base_transform = A.Compose([
+        A.Resize(512, 512),
+        A.Normalize(mean=MEAN, std=STD),
+        ToTensorV2(),
+    ])
+
+    print(f"Inference: {len(test_ids)} images, TTA: {use_tta}, scales: {scales}")
+    for img_id in tqdm(test_ids, desc="Inference"):
+        img_path = os.path.join(test_img_dir, f"{img_id}.jpg")
+        img_np = np.array(Image.open(img_path).convert('RGB'))
+
+        if use_tta:
+            mask = predict_with_tta(model, img_np, device, scales=scales, use_flip=True)
+        else:
+            transformed = base_transform(image=img_np)['image'].unsqueeze(0).to(device)
+            logits = model(transformed)
+            H_orig, W_orig = img_np.shape[:2]
+            logits = F.interpolate(logits, size=(H_orig, W_orig), mode='bilinear', align_corners=False)
+            mask = torch.argmax(logits, dim=1).squeeze(0).cpu().numpy()
+
+        rles = mask_to_rle(mask, empty_classes=EMPTY_CLASSES)
+        for class_id in range(NUM_CLASSES):
+            results.append({
+                'id': f"{img_id}_{class_id}",
+                'encoded_pixels': rles[class_id]
+            })
+
+    df = pd.DataFrame(results)
+    df.to_csv('submission.csv', index=False)
+    print(f"Saved: {len(df)} rows")
+    return df
+
+print("Inference ready")
+
+
+==================================================
+CELL 14 (CODE)
+==================================================
+
+def validate_submission(submission_path='submission.csv'):
+    df = pd.read_csv(submission_path)
+    assert list(df.columns) == ['id', 'encoded_pixels'], f"Wrong columns: {list(df.columns)}"
+    expected_rows = 447 * 10
+    assert len(df) == expected_rows, f"Expected {expected_rows}, got {len(df)}"
+
+    invalid_rle = 0
+    for _, row in df.iterrows():
+        if row['encoded_pixels'] and row['encoded_pixels'] != '':
+            parts = row['encoded_pixels'].split()
+            if len(parts) % 2 != 0:
+                invalid_rle += 1
+
+    print(f"Rows: {len(df)}")
+    print(f"Invalid RLE: {invalid_rle}")
+    for class_id in EMPTY_CLASSES:
+        class_rows = df[df['id'].str.endswith(f'_{class_id}')]
+        non_empty = len(class_rows[class_rows['encoded_pixels'] != ''])
+        print(f"Class {class_id} ({CLASS_NAMES[class_id]}): {non_empty} non-empty (should be 0)")
+
+    if invalid_rle == 0:
+        print("SUBMISSION VALID")
+        return True
+    else:
+        print("SUBMISSION INVALID")
+        return False
+
+==================================================
+CELL 15 (CODE)
+==================================================
+
+device = torch.device('cuda')
+torch.cuda.empty_cache()
+
+model = init_model(device)
+optimizer = configure_optimizer(
+    model,
+    lr_backbone=TRAIN_CONFIG['lr_backbone'],
+    lr_head=TRAIN_CONFIG['lr_head'],
+    weight_decay=TRAIN_CONFIG['weight_decay']
+)
+# FIX: scheduler now accounts for accum_steps + warmup
+scheduler = get_poly_scheduler(
+    optimizer,
+    TRAIN_CONFIG['num_epochs'],
+    len(train_loader),
+    accum_steps=TRAIN_CONFIG['accumulation_steps'],
+    power=TRAIN_CONFIG['poly_power'],
+    warmup_steps=TRAIN_CONFIG['warmup_steps']
+)
+loss_fn_device = FloodSegLoss(
+    CLASS_WEIGHTS.to(device),
+    lovasz_weight=TRAIN_CONFIG['lovasz_weight'],
+    empty_classes=EMPTY_CLASSES
+)
+
+trainer = Trainer(
+    model=model,
+    train_loader=train_loader,
+    val_loader=val_loader,
+    loss_fn=loss_fn_device,
+    optimizer=optimizer,
+    scheduler=scheduler,
+    device=device,
+    config=TRAIN_CONFIG,
+    use_amp=True
+)
+
+history = trainer.train()
+
+
+==================================================
+CELL 16 (CODE)
+==================================================
+
+device = torch.device('cuda')
+torch.cuda.empty_cache()
+
+best_ckpt = os.path.join(TRAIN_CONFIG['save_dir'], 'best_miou.pth')
+ckpt = torch.load(best_ckpt, map_location=device, weights_only=False)
+model = init_model(device)
+model.load_state_dict(ckpt['model_state_dict'])
+model.eval()
+print(f"Loaded from epoch {ckpt['epoch']}, best mIoU: {ckpt['best_miou']:.4f}")
+
+test_ids = sorted([os.path.splitext(f)[0] for f in os.listdir(TEST_IMG) if f.endswith('.jpg')])
+df = generate_submission(model, TEST_IMG, test_ids, device, use_tta=True, scales=[0.75, 1.0, 1.25])
+validate_submission()
+
+
+==================================================
+CELL 17 (CODE)
+==================================================
+
+from google.colab import files
+files.download('submission.csv')
