@@ -35,7 +35,7 @@ Notebook ini menyajikan pipeline lengkap **segmentasi semantik area banjir** pad
 | 8 | `vehicle` | Kendaraan **rare** |
 | 9 | `water` | Badan air |
 
-**Tantangan utama**: severe class imbalance — kelas `water` mendominasi >56% piksel, sementara `tree` dan `vehicle` masing-masing hanya <0,2%, menghasilkan **rasio imbalance 317,6:1**.
+**Tantangan utama**: severe class imbalance kelas `water` mendominasi >56% piksel, sementara `tree` dan `vehicle` masing-masing hanya <0,2%, menghasilkan **rasio imbalance 317,6:1**.
 
 **Metrik evaluasi**: mIoU (mean Intersection over Union).
 
